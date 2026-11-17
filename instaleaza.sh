@@ -65,7 +65,7 @@ umask 077
 mkdir -p /etc/hugetech-baza /var/lib/hugetech-baza/lucru /var/backups/hugetech-baza
 echo -n "$COD" > /etc/hugetech-baza/cod
 for DB in erp curieri; do
-  [ -s /etc/hugetech-baza/parola-$DB ] || tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 > /etc/hugetech-baza/parola-$DB
+  [ -s /etc/hugetech-baza/parola-$DB ] || openssl rand -hex 24 > /etc/hugetech-baza/parola-$DB  # nu tr|head: cu pipefail, SIGPIPE oprea scriptul
   P=$(cat /etc/hugetech-baza/parola-$DB)
   runuser -u postgres -- psql -v ON_ERROR_STOP=1 -q <<SQL
 DO \$\$ BEGIN
