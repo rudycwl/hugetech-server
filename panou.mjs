@@ -217,7 +217,7 @@ ${linii.map(sectiune).join('')}`, !!ruleazaAcum));
   } catch (e) { trimite(500, pagina(`<p class="rau">${esc(String(e.message || e).replace(/postgres(ql)?:\/\/[^\s]+/g, '[adresă]'))}</p><p><a href="/">Înapoi</a></p>`)); }
 });
 if (process.argv[1]?.endsWith('panou.mjs')) {
-  fs.mkdirSync(LUCRU, { recursive: true }); fs.chmodSync(LUCRU, 0o711); // postgres poate deschide fișierul lui, dar nu listează dosarul
+  fs.mkdirSync(LUCRU, { recursive: true }); fs.chmodSync(VAR, 0o711); fs.chmodSync(LUCRU, 0o711); // postgres poate deschide fișierul lui, dar nu listează dosarul
   fs.rmSync(RULEAZA, { force: true }); // o copiere întreruptă de o repornire nu mai rulează
   server.listen(3001, '127.0.0.1', () => console.log('panou pe 127.0.0.1:3001'));
 }
