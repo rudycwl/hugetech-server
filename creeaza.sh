@@ -10,23 +10,39 @@ NUME=hugetech
 q() { "$@" --raw-output 2>/dev/null | sed 's/^null$//'; }
 
 echo "1/5 Rețeaua..."
+# Contul gratuit permite doar 2 rețele (VCN): una e a CheiaMea, cealaltă a proxy-ului eMAG (eDever).
+# Serverul hugetech intră în rețeaua eDever, dar pe o subrețea proprie, cu listă de securitate proprie:
+# regulile proxy-ului eMAG nu se ating.
 VCN=$(q oci network vcn list -c "$T" --display-name $NUME-vcn --lifecycle-state AVAILABLE --query 'data[0].id')
-[ -n "$VCN" ] || VCN=$(q oci network vcn create -c "$T" --cidr-block 10.1.0.0/16 --display-name $NUME-vcn --dns-label $NUME --wait-for-state AVAILABLE --query data.id)
+[ -n "$VCN" ] || VCN=$(q oci network vcn list -c "$T" --lifecycle-state AVAILABLE --query "data[?\"display-name\"!='cheiamea-vcn'] | [0].id")
+[ -n "$VCN" ] || { echo "EROARE: nu găsesc rețeaua eDever"; exit 1; }
+echo "   rețeaua: $(q oci network vcn get --vcn-id "$VCN" --query 'data."display-name"')"
 IGW=$(q oci network internet-gateway list -c "$T" --vcn-id "$VCN" --query 'data[0].id')
 [ -n "$IGW" ] || IGW=$(q oci network internet-gateway create -c "$T" --vcn-id "$VCN" --is-enabled true --display-name $NUME-igw --wait-for-state AVAILABLE --query data.id)
 RT=$(q oci network vcn get --vcn-id "$VCN" --query 'data."default-route-table-id"')
-SL=$(q oci network vcn get --vcn-id "$VCN" --query 'data."default-security-list-id"')
-oci network route-table update --rt-id "$RT" --force \
-  --route-rules "[{\"destination\":\"0.0.0.0/0\",\"destinationType\":\"CIDR_BLOCK\",\"networkEntityId\":\"$IGW\"}]" >/dev/null
+if [ -z "$(q oci network route-table get --rt-id "$RT" --query 'data."route-rules"[0]."network-entity-id"')" ]; then
+  oci network route-table update --rt-id "$RT" --force \
+    --route-rules "[{\"destination\":\"0.0.0.0/0\",\"destinationType\":\"CIDR_BLOCK\",\"networkEntityId\":\"$IGW\"}]" >/dev/null
+fi
 
-echo "2/5 Porturile 22, 80, 443 și 5432 (PostgreSQL, doar cu SSL și parolă)..."
+echo "2/5 Porturile 22, 80, 443 și 5432 (PostgreSQL, doar cu SSL și parolă), pe lista proprie..."
 port() { echo "{\"source\":\"0.0.0.0/0\",\"protocol\":\"6\",\"tcpOptions\":{\"destinationPortRange\":{\"min\":$1,\"max\":$1}}}"; }
-oci network security-list update --security-list-id "$SL" --force \
-  --ingress-security-rules "[$(port 22),$(port 80),$(port 443),$(port 5432),{\"source\":\"0.0.0.0/0\",\"protocol\":\"1\",\"icmpOptions\":{\"type\":3,\"code\":4}}]" \
-  --egress-security-rules '[{"destination":"0.0.0.0/0","protocol":"all"}]' >/dev/null
-
-SUB=$(q oci network subnet list -c "$T" --vcn-id "$VCN" --lifecycle-state AVAILABLE --query 'data[0].id')
-[ -n "$SUB" ] || SUB=$(q oci network subnet create -c "$T" --vcn-id "$VCN" --cidr-block 10.1.0.0/24 --display-name $NUME-subnet --dns-label public --wait-for-state AVAILABLE --query data.id)
+REGULI="[$(port 22),$(port 80),$(port 443),$(port 5432),{\"source\":\"0.0.0.0/0\",\"protocol\":\"1\",\"icmpOptions\":{\"type\":3,\"code\":4}}]"
+SL=$(q oci network security-list list -c "$T" --vcn-id "$VCN" --display-name $NUME-sl --query 'data[0].id')
+if [ -z "$SL" ]; then
+  SL=$(q oci network security-list create -c "$T" --vcn-id "$VCN" --display-name $NUME-sl --ingress-security-rules "$REGULI" \
+    --egress-security-rules '[{"destination":"0.0.0.0/0","protocol":"all"}]' --wait-for-state AVAILABLE --query data.id)
+fi
+SUB=$(q oci network subnet list -c "$T" --vcn-id "$VCN" --display-name $NUME-subnet --lifecycle-state AVAILABLE --query 'data[0].id')
+if [ -z "$SUB" ]; then
+  FOLOSITE=$(oci network subnet list -c "$T" --vcn-id "$VCN" --query 'data[]."cidr-block"' --raw-output 2>/dev/null || true)
+  BAZA=$(q oci network vcn get --vcn-id "$VCN" --query 'data."cidr-block"' | cut -d. -f1-2)
+  for N in 1 2 3 4 5 6 7 8 9; do CIDR="$BAZA.$N.0/24"; echo "$FOLOSITE" | grep -q "\"$CIDR\"" || break; done
+  echo "   subrețea nouă: $CIDR"
+  SUB=$(q oci network subnet create -c "$T" --vcn-id "$VCN" --cidr-block "$CIDR" --display-name $NUME-subnet \
+    --route-table-id "$RT" --security-list-ids "[\"$SL\"]" --wait-for-state AVAILABLE --query data.id)
+fi
+[ -n "$SUB" ] || { echo "EROARE: subrețeaua nu s-a creat"; exit 1; }
 
 echo "3/5 Cheia SSH (rămâne în Cloud Shell, în ~/.ssh/hugetech)..."
 [ -f ~/.ssh/hugetech.pub ] || { mkdir -p ~/.ssh && ssh-keygen -q -t rsa -b 4096 -N '' -f ~/.ssh/hugetech; }
