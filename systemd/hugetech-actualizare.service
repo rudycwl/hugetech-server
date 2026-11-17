@@ -1,0 +1,6 @@
+[Unit]
+Description=Actualizarea scripturilor hugetech-server din GitHub
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/hugetech-server/actualizeaza.sh

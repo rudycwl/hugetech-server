@@ -1,0 +1,6 @@
+[Unit]
+Description=Copia de noapte a bazelor erp și curieri
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/hugetech-server/copie-noapte.sh

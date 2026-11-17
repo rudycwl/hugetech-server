@@ -1,0 +1,11 @@
+[Unit]
+Description=Panoul serverului hugetech (mutarea bazelor din Neon)
+After=network-online.target postgresql.service
+
+[Service]
+ExecStart=/usr/bin/node /opt/hugetech-server/panou.mjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
