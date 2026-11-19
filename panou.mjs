@@ -224,6 +224,15 @@ const server = http.createServer(async (req, res) => {
     if (m) return trimite(200, pagina(`<h1>Adresa nouă – ${esc(BAZE[m[1]])}</h1><p>Render → ${m[1] === 'erp' ? 'hugetech-erp' : 'edever-curieri'} → Environment → <b>DATABASE_URL</b> → înlocuiești valoarea cu:</p>
 <p><code id="a">${esc(adresaNoua(m[1]))}</code></p><button onclick="navigator.clipboard.writeText(document.getElementById('a').textContent)">Copiază</button>
 <p><small>Înainte de a o înlocui, apasă din nou „Copiază din Neon” în panou, ca să fie aduse și ultimele modificări. Apoi „Save, rebuild and deploy”.</small></p><p><a href="/">Înapoi</a></p>`));
+    if (req.method === 'GET' && url.pathname === '/cheiamea-erori') {
+      // 19.11.2026: erorile site-ului cheiamea.ro (aceeași sursă ca ERP-ul), citite cu CHEIAMEA_ERP_KEY din variabilele ERP; cheia nu se afișează.
+      let cheie = '';
+      try { cheie = JSON.parse(fs.readFileSync('/etc/hugetech-aplicatii/erp.json', 'utf8')).CHEIAMEA_ERP_KEY || ''; } catch {}
+      const de = url.searchParams.get('de') || new Date(Date.now() - 2 * 86400000).toISOString();
+      const r = await fetch(`https://cheiamea.ro/api/erp/erori?de=${encodeURIComponent(de)}`, { headers: { 'x-erp-key': cheie } });
+      res.writeHead(r.status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(await r.text());
+    }
     if (req.method === 'GET' && url.pathname === '/copie-completa') {
       // 19.11.2026 (Rudy: backup înainte de ștergerea contului Render, de pus pe NAS): bazele erp + curieri (pg_dump acum)
       // și variabilele aplicațiilor (ce era în Render → Environment), într-o arhivă .tar.gz descărcată din browser.
