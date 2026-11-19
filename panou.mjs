@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { variabile } from './panou-variabile.mjs';
+import { APLICATII, valori, salveaza } from './aplicatii.mjs';
 
 const ETC = '/etc/hugetech-baza', VAR = '/var/lib/hugetech-baza', LUCRU = `${VAR}/lucru`;
 const STARE = `${VAR}/stare.json`, RULEAZA = `${VAR}/ruleaza`, JURNAL = `${VAR}/jurnal.txt`;
@@ -199,13 +200,24 @@ const server = http.createServer(async (req, res) => {
       if (fs.existsSync(RULEAZA)) return trimite(409, pagina('<p>Rulează deja o copiere. <a href="/">Înapoi</a></p>'));
       const f = `${ETC}/neon-${db}`;
       if (neon?.trim()) { envNeon(neon.trim()); fs.writeFileSync(f, neon.trim(), { mode: 0o600 }); }
-      const adresa = citeste(f);
+      // Fără adresă lipită: se folosește DATABASE_URL al aplicației (importat din Render), dacă e încă la Neon.
+      const dinAplicatie = String(valori(db).DATABASE_URL || '');
+      const adresa = citeste(f) || (/neon\.tech/.test(dinAplicatie) ? dinAplicatie : '');
       if (!adresa) return trimite(400, pagina('<p class="rau">Lipește adresa Neon.</p><p><a href="/">Înapoi</a></p>'));
       copiaza(db, adresa); return inapoi();
     }
     if (req.method === 'POST' && url.pathname === '/comutat') {
       const { db } = await corpCerere(req);
       if (BAZE[db]) { fs.rmSync(`${ETC}/neon-${db}`, { force: true }); const s = stare(); s[db] = { ...(s[db] || {}), comutat: new Date().toISOString() }; scrieStare(s); jurnal(`${db}: comutat`); }
+      return inapoi();
+    }
+    if (req.method === 'POST' && url.pathname === '/comuta-local') {
+      // Aplicația de pe acest server trece pe baza copiată aici (DATABASE_URL nou + repornire).
+      const { db } = await corpCerere(req);
+      if (BAZE[db] && APLICATII[db] && stare()[db]?.copiere?.ok) {
+        salveaza(db, { ...valori(db), DATABASE_URL: adresaNoua(db) });
+        fs.rmSync(`${ETC}/neon-${db}`, { force: true }); const s = stare(); s[db] = { ...(s[db] || {}), comutat: new Date().toISOString() }; scrieStare(s); jurnal(`${db}: comutat local`);
+      }
       return inapoi();
     }
     const m = /^\/adresa\/(erp|curieri)$/.exec(url.pathname);
