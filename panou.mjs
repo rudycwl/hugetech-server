@@ -224,10 +224,29 @@ const server = http.createServer(async (req, res) => {
     if (m) return trimite(200, pagina(`<h1>Adresa nouă – ${esc(BAZE[m[1]])}</h1><p>Render → ${m[1] === 'erp' ? 'hugetech-erp' : 'edever-curieri'} → Environment → <b>DATABASE_URL</b> → înlocuiești valoarea cu:</p>
 <p><code id="a">${esc(adresaNoua(m[1]))}</code></p><button onclick="navigator.clipboard.writeText(document.getElementById('a').textContent)">Copiază</button>
 <p><small>Înainte de a o înlocui, apasă din nou „Copiază din Neon” în panou, ca să fie aduse și ultimele modificări. Apoi „Save, rebuild and deploy”.</small></p><p><a href="/">Înapoi</a></p>`));
+    if (req.method === 'GET' && url.pathname === '/copie-completa') {
+      // 19.11.2026 (Rudy: backup înainte de ștergerea contului Render, de pus pe NAS): bazele erp + curieri (pg_dump acum)
+      // și variabilele aplicațiilor (ce era în Render → Environment), într-o arhivă .tar.gz descărcată din browser.
+      const zi = new Date().toISOString().slice(0, 10), dir = fs.mkdtempSync('/tmp/copie-'); fs.chmodSync(dir, 0o700);
+      try {
+        for (const db of Object.keys(BAZE)) {
+          const r = await caPostgres('pg_dump', ['-Fc', db], { fisier: `${dir}/${db}-${zi}.dump` });
+          if (r.cod !== 0) throw new Error(`pg_dump ${db}: ${r.err.trim()}`);
+        }
+        fs.mkdirSync(`${dir}/variabile`);
+        for (const f of fs.readdirSync('/etc/hugetech-aplicatii')) if (/^\w+\.json$/.test(f)) fs.copyFileSync(`/etc/hugetech-aplicatii/${f}`, `${dir}/variabile/${f}`);
+        fs.writeFileSync(`${dir}/CITESTE.txt`, `Copie completă server hugetech, ${new Date().toISOString()}\n- erp-*.dump, curieri-*.dump: pg_restore -d <baza> <fisier>\n- variabile/*.json: variabilele aplicațiilor (fostele Environment din Render). Conțin parole și chei: se păstrează doar pe NAS.\n`);
+        res.writeHead(200, { 'Content-Type': 'application/gzip', 'Content-Disposition': `attachment; filename="hugetech-copie-${zi}.tar.gz"`, 'Cache-Control': 'no-store' });
+        const t = spawn('tar', ['-czf', '-', '-C', dir, '.']);
+        t.stdout.pipe(res); t.on('close', () => fs.rmSync(dir, { recursive: true, force: true }));
+        jurnal('copie completă descărcată');
+      } catch (e) { fs.rmSync(dir, { recursive: true, force: true }); throw e; }
+      return;
+    }
     const linii = await situatie();
     const ruleazaAcum = citeste(RULEAZA);
     trimite(200, pagina(`<h1>Server hugetech</h1><p><small>IP ${esc(IP)} · PostgreSQL ${esc((await sqlLocal('postgres', 'show server_version')).trim())} · copia de noapte: ${esc(citeste(`${VAR}/ultima-copie`) || 'încă nu')}${ruleazaAcum ? ` · <b>copiere în curs: ${esc(ruleazaAcum)}</b>` : ''}</small></p>
-<p><a href="/variabile"><b>Variabile aplicații</b></a> – ERP și edever-curieri mutate de pe Render</p>
+<p><a href="/variabile"><b>Variabile aplicații</b></a> – ERP și edever-curieri mutate de pe Render · <a href="/copie-completa"><b>Descarcă copia completă</b></a> (baze + variabile, pentru NAS)</p>
 ${linii.map(sectiune).join('')}`, !!ruleazaAcum));
   } catch (e) { trimite(500, pagina(`<p class="rau">${esc(String(e.message || e).replace(/postgres(ql)?:\/\/[^\s]+/g, '[adresă]'))}</p><p><a href="/">Înapoi</a></p>`)); }
 });
