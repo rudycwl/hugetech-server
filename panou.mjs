@@ -5,6 +5,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
+import { variabile } from './panou-variabile.mjs';
 
 const ETC = '/etc/hugetech-baza', VAR = '/var/lib/hugetech-baza', LUCRU = `${VAR}/lucru`;
 const STARE = `${VAR}/stare.json`, RULEAZA = `${VAR}/ruleaza`, JURNAL = `${VAR}/jurnal.txt`;
@@ -172,7 +173,7 @@ function sectiune(x) {
 }
 
 function corpCerere(req) {
-  return new Promise((rez) => { let d = ''; req.on('data', (c) => { d += c; if (d.length > 1e5) req.destroy(); }); req.on('end', () => rez(Object.fromEntries(new URLSearchParams(d)))); });
+  return new Promise((rez) => { let d = ''; req.on('data', (c) => { d += c; if (d.length > 1e6) req.destroy(); }); req.on('end', () => rez(Object.fromEntries(new URLSearchParams(d)))); });
 }
 
 const server = http.createServer(async (req, res) => {
@@ -191,6 +192,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(303, { Location: '/', 'Set-Cookie': `${cookie()}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=43200` }); return res.end();
     }
     if (!autentificat(req)) return trimite(200, pagina('<h1>Server hugetech</h1><form method="post" action="/intra"><label>Codul de configurare</label><input type="password" name="cod" autofocus><button>Intră</button></form>'));
+    if (url.pathname.startsWith('/variabile') && await variabile(req, res, url, { pagina, esc, corpCerere, trimite })) return;
     if (req.method === 'POST' && url.pathname === '/copiaza') {
       const { db, neon } = await corpCerere(req);
       if (!BAZE[db]) return inapoi();
@@ -213,6 +215,7 @@ const server = http.createServer(async (req, res) => {
     const linii = await situatie();
     const ruleazaAcum = citeste(RULEAZA);
     trimite(200, pagina(`<h1>Server hugetech</h1><p><small>IP ${esc(IP)} · PostgreSQL ${esc((await sqlLocal('postgres', 'show server_version')).trim())} · copia de noapte: ${esc(citeste(`${VAR}/ultima-copie`) || 'încă nu')}${ruleazaAcum ? ` · <b>copiere în curs: ${esc(ruleazaAcum)}</b>` : ''}</small></p>
+<p><a href="/variabile"><b>Variabile aplicații</b></a> – ERP și edever-curieri mutate de pe Render</p>
 ${linii.map(sectiune).join('')}`, !!ruleazaAcum));
   } catch (e) { trimite(500, pagina(`<p class="rau">${esc(String(e.message || e).replace(/postgres(ql)?:\/\/[^\s]+/g, '[adresă]'))}</p><p><a href="/">Înapoi</a></p>`)); }
 });

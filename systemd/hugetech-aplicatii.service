@@ -1,0 +1,9 @@
+[Unit]
+Description=Ia din GitHub (main) și construiește ERP-ul și aplicația eDever, apoi le repornește
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/node /opt/hugetech-server/aplicatii.mjs actualizeaza
+TimeoutStartSec=45min
+Nice=10
