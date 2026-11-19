@@ -1,0 +1,6 @@
+[Unit]
+Description=Apelează /healthz la ERP și la aplicația eDever (de aici pornesc sincronizările programate, ca pe Render cu cron-job.org/UptimeRobot)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'for p in 3010 3020; do curl -fsS -m 60 -o /dev/null "http://127.0.0.1:$p/healthz" || echo "healthz $p nu răspunde"; done; exit 0'

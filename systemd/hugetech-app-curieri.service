@@ -1,0 +1,21 @@
+[Unit]
+Description=Hugetech Operațiuni (edever-curieri)
+After=network-online.target postgresql.service
+Wants=network-online.target
+# Pornește doar cu variabilele obligatorii completate în panou și cu o versiune construită (altfel nu încearcă deloc).
+ConditionPathExists=/etc/hugetech-aplicatii/curieri.gata
+ConditionPathExists=/var/lib/hugetech-aplicatii/curieri.construit
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+ExecStart=/usr/bin/node /opt/hugetech-server/aplicatii.mjs porneste curieri
+Restart=on-failure
+RestartSec=10
+KillMode=mixed
+TimeoutStopSec=20
+MemoryMax=3G
+SyslogIdentifier=hugetech-app-curieri
+
+[Install]
+WantedBy=multi-user.target
